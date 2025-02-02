@@ -1,5 +1,5 @@
 [project]
-name = "weather-agent-bot"
+name = "quiz-ai"
 version = "0.1.0"
 description = "A Discord bot that provides weather information automatically using a Mistral agent"
 authors = ["Thijs Simonian <thijs@stanford.edu>"]

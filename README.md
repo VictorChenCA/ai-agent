@@ -1,4 +1,5 @@
 # CS 153 - QuizAI
+Our final project is an agent to help with flashcard based studying -- simply put, we aimed to emulate the experience of going over flashcards with a knowledgable (and patient!) partner. Our agent is accessible through the QuizAI discord channel, and its very easy to get started. Simply send over a list of flashcard pairs or terms, and our agent will question you and talk through what the correct reasoning was. While regular flashcards promote rote memorization, we have built our agent to prompt critical thinking in the response to each quesion. 
 
 Here is an example of a very simple final project. This should be a good starter point giving you a sense of what technical abilities you will need for this class. This would be an example of a simple, passing grade project that has been built off our starter code. We're looking for much cooler and technically complex projects that will catch the eyes of our judges :).
 

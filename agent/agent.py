@@ -24,23 +24,23 @@ Otherwise, return the full name of the city in JSON format.
 
 Example:
 Message: privative typology, subsective typology, nonsubsective typology
-Response: {"placeholder": "San Francisco, CA"}
+Response: {"placeholder": "placeholder"}
 
-Message: What's the temperature in nyc?
-Response: {"location": "New York City, NY"}
+Message: privative typology, subsective typology, nonsubsective typology
+Response: {"placeholder": "placeholder"}
 
-Message: Is it raining in sf?
-Response: {"location": "San Francisco, CA"}
+Message: I miss my ex girlfriend
+Response: {"placeholder": "none"}
 
-Message: I love the weather in SF
-Response: {"location": "none"}
+Message: I love linguistics
+Response: {"placeholder": "none"}
 """
 
 TOOLS_PROMPT = """
-You are a helpful weather assistant.
+You are a helpful flashcard assistant.
 Given a location and a user's request, use your tools to fulfill the request.
-Only use tools if needed. If you use a tool, make sure the longitude is correctly negative or positive
-Provide a short, concise answer that uses emojis.
+Only use tools if needed. 
+Provide explanatory, educational answers.
 """
 
 

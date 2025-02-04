@@ -16,15 +16,15 @@ logger = logging.getLogger("discord")
 
 MISTRAL_MODEL = "mistral-large-latest"
 
-EXTRACT_LOCATION_PROMPT = """
-Is this message explicitly requesting weather information for a specific city/location?
-If not, return {"location": "none"}.
+EXTRACT_TERMS_PROMPT = """
+Is this message clearly giving a list of terms or a paired list of terms and definitions?
+If not, return {"placeholder": "none"}.
 
 Otherwise, return the full name of the city in JSON format.
 
 Example:
-Message: What's the weather in sf?
-Response: {"location": "San Francisco, CA"}
+Message: privative typology, subsective typology, nonsubsective typology
+Response: {"placeholder": "San Francisco, CA"}
 
 Message: What's the temperature in nyc?
 Response: {"location": "New York City, NY"}

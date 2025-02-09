@@ -36,12 +36,6 @@ Message: I love linguistics
 Response: {"placeholder": "none"}
 """
 
-TOOLS_PROMPT = """
-You are a helpful flashcard assistant.
-Given a location and a user's request, use your tools to fulfill the request.
-Only use tools if needed. 
-Provide explanatory, educational answers.
-"""
 
 TOOLS_PROMPT = """
 You are a patient study assistant designed to help students learn through interactive flashcards.

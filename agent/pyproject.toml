@@ -1,8 +1,8 @@
 [project]
 name = "quiz-ai"
 version = "0.1.0"
-description = "A Discord bot that provides weather information automatically using a Mistral agent"
-authors = ["Thijs Simonian <thijs@stanford.edu>"]
+description = "A Discord bot that helps with flashcard-based studying using a Mistral agent."
+authors = ["Victor Chen <victor36@stanford.edu>", "Justin Yang <jstnyang@stanford.edu>", "Ethan Yuen <ehyuen@stanford.edu>", "Mark Marquez <mark.marquez@stanfor.edu>" ]
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

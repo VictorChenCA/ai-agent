@@ -25,7 +25,8 @@ agent = MistralAgent()
 
 # Get the token from the environment variables
 token = os.getenv("DISCORD_TOKEN")
-
+if token is None:
+    print("Error: DISCORD_TOKEN is not set or loaded properly.")
 
 @bot.event
 async def on_ready():

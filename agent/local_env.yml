@@ -1,4 +1,4 @@
-name: discord_bot
+name: discord_agent
 channels:
   - defaults
 dependencies:

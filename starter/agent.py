@@ -1,4 +1,5 @@
 import os
+from dotenv import load_dotenv
 from mistralai import Mistral
 import discord
 
@@ -8,7 +9,10 @@ SYSTEM_PROMPT = "You are a helpful assistant."
 
 class MistralAgent:
     def __init__(self):
+        load_dotenv()
         MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+        if MISTRAL_API_KEY is None:
+            print("Error: MISTRAL_API_KEY is not set or loaded properly.")
 
         self.client = Mistral(api_key=MISTRAL_API_KEY)
 

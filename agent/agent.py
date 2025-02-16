@@ -1,175 +1,57 @@
-# This is a basic agent that uses Mistral AI to answer weather questions.
-# This agent is designed to be piped every single message in a Discord server.
-# First, the agent checks for a location in the message, and extracts it if it exists.
-# This prevents the agent from responding to messages that don't ask about weather.
-# Then, a separate prompt chain is used to get the weather data and response.
-
-import os
-import json
 import logging
-import discord
-
 from mistralai import Mistral
-from tools.weather import seven_day_forecast
-
-logger = logging.getLogger("discord")
-
-MISTRAL_MODEL = "mistral-large-latest"
-
-EXTRACT_LOCATION_PROMPT = """
-Is this message explicitly requesting weather information for a specific city/location?
-If not, return {"location": "none"}.
-
-Otherwise, return the full name of the city in JSON format.
-
-Example:
-Message: What's the weather in sf?
-Response: {"location": "San Francisco, CA"}
-
-Message: What's the temperature in nyc?
-Response: {"location": "New York City, NY"}
-"""
-
-EXTRACT_TERMS_PROMPT = """
-Is this message clearly giving a list of terms or a paired list of terms and definitions?
-If not, return {"placeholder": "none"}.
-
-Otherwise, return the full name of the city in JSON format.
-
-Example:
-Message: privative typology, subsective typology, nonsubsective typology
-Response: {"placeholder": "placeholder"}
-
-Message: privative typology, subsective typology, nonsubsective typology
-Response: {"placeholder": "placeholder"}
-
-Message: I miss my ex girlfriend
-Response: {"placeholder": "none"}
-
-Message: I love linguistics
-Response: {"placeholder": "none"}
-"""
+import os
+from dotenv import load_dotenv
 
 
-TOOLS_PROMPT = """
-You are a patient study assistant designed to help students learn through interactive flashcards.
+logging.basicConfig(level=logging.INFO)
 
-Your primary functions include:
-   
-- **Subject Mode:** Prompt user for a subject and/or specific topics, then choose related terms and definitions.
-- **Notes Mode:** Accept user-provided notes, then choose terms and definitions from those notes.
+load_dotenv()
+MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
 
-- **Game Setting:** If enabled, introduce point-based system where users can pass levels with correct answers.
-- **Adaptive Difficulty Setting** Adjusts the difficulty of questions based on user performance.
-
-- **Multiple Choice Format** Instead of open-ended answers, allows users to choose from multiple-choice options.
-- **Fill In The Blank Format** Presents definitions with missing words that users must fill in.
-- **Free Response Format** Allow users to answer questions in one or more sentences. 
-
-Engage users in a conversational manner to make learning feel natural and effective.
-Encourage learning through repetition and interactive questioning.
-Only use tools when necessary and focus on enhancing the study experience.
-"""
-
-
-class WeatherAgent:
+class StudyAgent:
+    
     def __init__(self):
-        MISTRAL_API_KEY = os.getenv("MISTRAL_API_KEY")
+        self.sessions = {}  
+        self.mistral = Mistral(api_key=MISTRAL_API_KEY)
 
-        self.client = Mistral(api_key=MISTRAL_API_KEY)
-        self.tools = [
-            {
-                "type": "function",
-                "function": {
-                    "name": "seven_day_forecast",
-                    "description": "Get the seven day forecast for a given location with latitude and longitude.",
-                    "parameters": {
-                        "type": "object",
-                        "properties": {
-                            "latitude": {"type": "string"},
-                            "longitude": {"type": "string"},
-                        },
-                        "required": ["latitude", "longitude"],
-                    },
-                },
-            }
-        ]
-        self.tools_to_functions = {
-            "seven_day_forecast": seven_day_forecast,
-        }
+    def start_session(self, user_id, terms):
+        self.sessions[user_id] = {"terms": terms, "current_term": 0}
 
-    async def extract_location(self, message: str) -> dict:
-        # Extract the location from the message.
-        response = await self.client.chat.complete_async(
-            model=MISTRAL_MODEL,
-            messages=[
-                {"role": "system", "content": EXTRACT_LOCATION_PROMPT},
-                {"role": "user", "content": f"Discord message: {message}\nOutput:"},
-            ],
-            response_format={"type": "json_object"},
-        )
+    def get_current_term(self, user_id):
+        session = self.sessions.get(user_id)
+        return session["terms"][session["current_term"]] if session else None
 
-        message = response.choices[0].message.content
-
-        obj = json.loads(message)
-        if obj["location"] == "none":
+    def next_term(self, user_id):
+        session = self.sessions.get(user_id)
+        if not session:
             return None
-
-        return obj["location"]
-
-    async def get_weather_with_tools(self, location: str, request: str):
-        messages = [
-            {"role": "system", "content": TOOLS_PROMPT},
-            {
-                "role": "user",
-                "content": f"Location: {location}\nRequest: {request}\nOutput:",
-            },
-        ]
-
-        # Require the agent to use a tool with the "any" tool choice.
-        tool_response = await self.client.chat.complete_async(
-            model=MISTRAL_MODEL,
-            messages=messages,
-            tools=self.tools,
-            tool_choice="any",
-        )
-
-        messages.append(tool_response.choices[0].message)
-
-        tool_call = tool_response.choices[0].message.tool_calls[0]
-        function_name = tool_call.function.name
-        function_params = json.loads(tool_call.function.arguments)
-        function_result = self.tools_to_functions[function_name](**function_params)
-
-        # Append the tool call and its result to the messages.
-        messages.append(
-            {
-                "role": "tool",
-                "name": function_name,
-                "content": function_result,
-                "tool_call_id": tool_call.id,
-            }
-        )
-
-        # Run the model again with the tool call and its result.
-        response = await self.client.chat.complete_async(
-            model=MISTRAL_MODEL,
-            messages=messages,
-        )
-
-        return response.choices[0].message.content
-
-    async def run(self, message: discord.Message):
-        # Extract the location from the message to verify that the user is asking about weather in a specific location.
-        location = await self.extract_location(message.content)
-        if location is None:
+            
+        session["current_term"] += 1
+        if session["current_term"] >= len(session["terms"]):
+            del self.sessions[user_id]
             return None
+        return session["terms"][session["current_term"]]
 
-        # Send a message to the user that we are fetching weather data.
-        res_message = await message.reply(f"Fetching weather for {location}...")
+    def check_answer(self, term, user_answer):
+        prompt = f"""
+        You are an AI tutor. The user was asked:
+        'What does {term} mean?'
 
-        # Use a second prompt chain to get the weather data and response.
-        weather_response = await self.get_weather_with_tools(location, message.content)
+        The user's answer: "{user_answer}"
 
-        # Edit the message to show the weather data.
-        await res_message.edit(content=weather_response)
+        Evaluate if the answer is correct. Respond with:
+        - ✅ "Correct!" if the answer is mostly accurate.
+        - ❌ "Incorrect" if it's wrong, followed by a brief correction.
+        """
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            response = self.mistral.chat.complete(
+                model="mistral-tiny",
+                messages=messages
+            )
+            return response.choices[0].message.content.strip()
+        except Exception as e:
+            logging.error(f"Error communicating with MistralAI: {str(e)}")
+            return "⚠️ Error evaluating the response. Please try again."

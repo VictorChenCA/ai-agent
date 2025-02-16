@@ -4,68 +4,65 @@ import logging
 import platform
 
 from discord.ext import commands
+from agent import StudyAgent
 from dotenv import load_dotenv
-from agent import WeatherAgent
 
+load_dotenv()
 intents = discord.Intents.default()
-
-# Enable message content intent so the bot can read messages.
-# The message content intent must be enabled in the Discord Developer Portal as well.
-intents.message_content = True
+intents.message_content = True  # Enable message content intent
 
 logger = logging.getLogger("discord")
 
-
 PREFIX = "!"
-CUSTOM_STATUS = "the forecasts"
-
 
 class DiscordBot(commands.Bot):
     def __init__(self):
-        super().__init__(
-            command_prefix=commands.when_mentioned_or(PREFIX), intents=intents
-        )
-
+        super().__init__(command_prefix=commands.when_mentioned_or(PREFIX), intents=intents)
         self.logger = logger
-        self.weather_agent = WeatherAgent()
+        self.study_agent = StudyAgent()
 
     async def on_ready(self):
         self.logger.info("-------------------")
         self.logger.info(f"Logged in as {self.user}")
         self.logger.info(f"Discord.py API version: {discord.__version__}")
         self.logger.info(f"Python version: {platform.python_version()}")
-        self.logger.info(
-            f"Running on: {platform.system()} {platform.release()} ({os.name})"
-        )
         self.logger.info("-------------------")
 
-        # Set the bot's custom status to "Watching the forecasts"
-        await self.change_presence(
-            activity=discord.Activity(
-                type=discord.ActivityType.watching, name=CUSTOM_STATUS
-            )
-        )
-
-    async def on_message(self, message: discord.Message):
-        await self.process_commands(message)
-
-        # Ignore messages from self or other bots.
-        if (
-            message.author == self.user
-            or message.author.bot
-            or message.content.startswith("!")
-        ):
+    async def on_message(self, message):
+        if message.author == self.user:
             return
 
-        self.logger.info(f"Message from {message.author}: {message.content}")
+        user_id = message.author.id
+        content = message.content.strip()
 
-        # Run the weather agent whenever the bot receives a message.
-        await self.weather_agent.run(message)
+        if user_id not in self.study_agent.sessions:
+            terms = [term.strip() for term in content.split(",") if term.strip()]
+            if len(terms) < 2:
+                await message.channel.send("⚠️ Please send a **comma-separated list** of terms to study. Example:\n```\nudp, tcp, idempotent, port\n```")
+                return
+
+            self.study_agent.start_session(user_id, terms)
+            term = self.study_agent.get_current_term(user_id)
+        else:
+            term = self.study_agent.get_current_term(user_id)
+            if not term:
+                await message.channel.send("❌ No active study session. Please send a list of terms to start.")
+                return
+                
+            await message.channel.send(self.study_agent.check_answer(term, content))
+            term = self.study_agent.next_term(user_id)
+
+        if term:
+            intro = "📖 Study session started! Let's begin." if user_id not in self.study_agent.sessions else "✅ Got it! Next question:"
+            await message.channel.send(f"{intro}\nWhat does **'{term}'** mean?")
+        else:
+            await message.channel.send("🎉 Study session complete! Great job!")
 
 
 if __name__ == "__main__":
-    load_dotenv()
-    token = os.getenv("DISCORD_TOKEN")
-
-    bot = DiscordBot()
-    bot.run(token)
+    DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+    if DISCORD_TOKEN:
+        bot = DiscordBot()
+        bot.run(DISCORD_TOKEN)
+    else:
+        logger.error("DISCORD_TOKEN not set.")

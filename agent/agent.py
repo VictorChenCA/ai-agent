@@ -1,8 +1,8 @@
-# This is a basic agent that uses Mistral AI to answer weather questions.
+# This is a basic agent that uses Mistral AI to help a user learn in a flashcard style.
 # This agent is designed to be piped every single message in a Discord server.
-# First, the agent checks for a location in the message, and extracts it if it exists.
-# This prevents the agent from responding to messages that don't ask about weather.
-# Then, a separate prompt chain is used to get the weather data and response.
+# First, the agent checks for a request to be quizzed on a term or terms in the message, and extracts it if it exists.
+# This prevents the agent from responding to messages that don't request QuizAI's help.
+# Then, a separate prompt chain is used to get definitions and responses from the user.
 
 import os
 import json
@@ -17,17 +17,17 @@ logger = logging.getLogger("discord")
 MISTRAL_MODEL = "mistral-large-latest"
 
 EXTRACT_LOCATION_PROMPT = """
-Is this message explicitly requesting weather information for a specific city/location?
-If not, return {"location": "none"}.
+Is this message explicitly requesting help with understanding an academic term?
+If not, return {"term": "none"}.
 
-Otherwise, return the full name of the city in JSON format.
+Otherwise, return the term in JSON format.
 
 Example:
-Message: What's the weather in sf?
-Response: {"location": "San Francisco, CA"}
+Message: What's a privative adjective???
+Response: {"term": "privative adjective"}
 
-Message: What's the temperature in nyc?
-Response: {"location": "New York City, NY"}
+Message: Dude I don't understand linear reg
+Response: {"term": "linear regression"}
 """
 
 EXTRACT_TERMS_PROMPT = """

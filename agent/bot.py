@@ -15,6 +15,7 @@ logger = logging.getLogger("discord")
 
 PREFIX = "!"
 
+
 class DiscordBot(commands.Bot):
     def __init__(self):
         super().__init__(command_prefix=commands.when_mentioned_or(PREFIX), intents=intents)
@@ -45,7 +46,7 @@ class DiscordBot(commands.Bot):
             if not term:
                 await message.channel.send("❌ No active study session. Please send a list of terms to start.")
                 return
-            
+
             await message.channel.send(self.study_agent.check_answer(term, content))
             term = self.study_agent.next_term(user_id)
 
@@ -54,6 +55,7 @@ class DiscordBot(commands.Bot):
             await message.channel.send(f"{intro}\nWhat does **'{term}'** mean?")
         else:
             await message.channel.send("🎉 Study session complete! Great job!")
+
 
 if __name__ == "__main__":
     DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")

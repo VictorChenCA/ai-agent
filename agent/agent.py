@@ -98,6 +98,25 @@ class WeatherAgent:
             "seven_day_forecast": seven_day_forecast,
         }
 
+    async def extract_mode(self, message: str) -> dict:
+        # Extract the location from the message.
+        response = await self.client.chat.complete_async(
+            model=MISTRAL_MODEL,
+            messages=[
+                {"role": "system", "content": EXTRACT_LOCATION_PROMPT},
+                {"role": "user", "content": f"Discord message: {message}\nOutput:"},
+            ],
+            response_format={"type": "json_object"},
+        )
+
+        message = response.choices[0].message.content
+
+        obj = json.loads(message)
+        if obj["location"] == "none":
+            return None
+
+        return obj["location"]
+
     async def extract_location(self, message: str) -> dict:
         # Extract the location from the message.
         response = await self.client.chat.complete_async(
@@ -161,6 +180,7 @@ class WeatherAgent:
 
     async def run(self, message: discord.Message):
         # Extract the location from the message to verify that the user is asking about weather in a specific location.
+        mode = await self.extract_mode(message.content)
         location = await self.extract_location(message.content)
         if location is None:
             return None

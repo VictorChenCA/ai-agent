@@ -36,28 +36,24 @@ class DiscordBot(commands.Bot):
         content = message.content.strip()
 
         if user_id not in self.study_agent.sessions:
-            terms = [term.strip() for term in content.split(",") if term.strip()]
-            if len(terms) < 2:
-                await message.channel.send("⚠️ Please send a **comma-separated list** of terms to study. Example:\n```\nudp, tcp, idempotent, port\n```")
+            term, response = self.study_agent.start_session(user_id, content)
+            if not term:
+                await message.channel.send(response)
                 return
-
-            self.study_agent.start_session(user_id, terms)
-            term = self.study_agent.get_current_term(user_id)
         else:
             term = self.study_agent.get_current_term(user_id)
             if not term:
                 await message.channel.send("❌ No active study session. Please send a list of terms to start.")
                 return
-                
+            
             await message.channel.send(self.study_agent.check_answer(term, content))
             term = self.study_agent.next_term(user_id)
 
         if term:
-            intro = "📖 Study session started! Let's begin." if user_id not in self.study_agent.sessions else "✅ Got it! Next question:"
+            intro = "✅ Got it! Next question:" if user_id in self.study_agent.sessions else response
             await message.channel.send(f"{intro}\nWhat does **'{term}'** mean?")
         else:
             await message.channel.send("🎉 Study session complete! Great job!")
-
 
 if __name__ == "__main__":
     DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")

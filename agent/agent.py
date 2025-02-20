@@ -88,7 +88,7 @@ class StudyAgent:
     def generate_multiple_choice_question(self, term):
         question = f"What does '{term}' mean?"
 
-        correct_answer = ""
+        correct_answer = self.generate_correct_answer(term)
         distractors = self.generate_distractors(term)
 
         options = [correct_answer] + distractors
@@ -130,13 +130,12 @@ class StudyAgent:
     def check_answer(self, term, user_answer, user_id, mcq_questions):
         session = self.sessions.get(user_id)
         if session["format"] == "Multiple Choice":
-            correct_answer = self.generate_correct_answer(term)
             prompt = f"""
             You are an AI tutor. The user was asked:
             'What does {term} mean?'
 
             The user's answer: "{user_answer}"
-            The correct answer is: "{correct_answer}"
+            The correct answer is: ""
             The other options are: {', '.join(mcq_questions)}
 
             Evaluate if the answer is correct and explain why the other options are incorrect. Respond with:

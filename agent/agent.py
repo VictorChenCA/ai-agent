@@ -135,7 +135,7 @@ class StudyAgent:
             'What does {term} mean?'
 
             The user's answer: "{user_answer}"
-            The correct answer is: ""
+            The correct answer is: "{mcq_questions[0]}"
             The other options are: {', '.join(mcq_questions)}
 
             Evaluate if the answer is correct and explain why the other options are incorrect. Respond with:

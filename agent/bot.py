@@ -1,4 +1,4 @@
-# This is a basic agent that uses Mistral AI to answer weather questions.
+# This is a basic agent that uses Mistral AI to help a user learn in a flashcard style.
 # This agent is designed to be piped every single message in a Discord server.
 # It will then call the on_message function.
 
@@ -19,20 +19,15 @@ intents.message_content = True
 logger = logging.getLogger("discord") # log discord messages
 logger.setLevel(logging.INFO)
 
-
 PREFIX = "!"
-MISTRAL_MODEL = "mistral-large-latest"
 CUSTOM_STATUS = "you not study"
 
 
 class DiscordBot(commands.Bot):
     def __init__(self):
-        super().__init__(
-            command_prefix=commands.when_mentioned_or(PREFIX), intents=intents
-        )
-
+        super().__init__(command_prefix=commands.when_mentioned_or(PREFIX), intents=intents)
         self.logger = logger
-        self.weather_agent = WeatherAgent()
+        self.study_agent = StudyAgent()
 
     async def on_ready(self):
         self.logger.info("-------------------")

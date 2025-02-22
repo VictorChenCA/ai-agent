@@ -6,9 +6,18 @@ Our final project is an agent to help with flashcard based studying -- simply pu
 
 
 
-
+### Instructional Video
+We've put together a video going through the setup of this starter code, and explaining various pieces of it. We highly recommend giving it a watch!
 
 Here is an example of a very simple final project. This should be a good starter point giving you a sense of what technical abilities you will need for this class. This would be an example of a simple, passing grade project that has been built off our starter code. We're looking for much cooler and technically complex projects that will catch the eyes of our judges :).
+
+### Cursor Tutorial
+We've put together a short tutorial on how to use the Cursor IDE for building your projects. Run Cmd(ctrl)-I to open the composer if it doesn't show up for you!
+
+[![Frame 11](https://github.com/user-attachments/assets/2a4442ca-4170-40e2-b7b7-e163ae450801)](https://drive.google.com/file/d/1XFs17kZvEUx2xFLVistcdDuHnGFXU93a/view?usp=drive_link)
+
+
+### Join the Discord Server
 
 ## Weather Agent
 

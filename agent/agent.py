@@ -101,7 +101,7 @@ class StudyAgent:
         The user's answer: "{user_answer}"
         
         Evaluate if the answer is correct. Respond with:
-        - ✅ "Correct!" if the answer is mostly accurate. Correct any minor mistakes. Be succinct.
+        - ✅ "Correct!" if the answer is mostly accurate. Be succinct.
         - ❌ "Incorrect" if it's wrong, followed by a brief correction.
         """
 

@@ -45,31 +45,73 @@ class DiscordBot(commands.Bot):
     async def on_message(self, message: discord.Message):
         await self.process_commands(message)
         self.logger.info(f"Message from {message.author}: {message.content}")
-        if (message.author == self.user or message.author.bot or message.content.startswith("!")): # ignore messages from self or bots
+
+        # ignore messages from self or bots
+        if message.author == self.user or message.author.bot or message.content.startswith("!"):
             return
 
         user_id = message.author.id
         content = message.content.strip()
 
+        # new session
         if user_id not in self.study_agent.sessions:
-            term, response = self.study_agent.start_session(user_id, content)
-            if not term:
-                await message.channel.send(response)
-                return
-        else:
-            term = self.study_agent.get_current_term(user_id)
-            if not term:
-                await message.channel.send("❌ No active study session. Please send a list of terms to start.")
-                return
-            
-            await message.channel.send(self.study_agent.check_answer(term, content))
-            term = self.study_agent.next_term(user_id)
+            self.logger.info(f"Starting study session for user {user_id}")
+            response = self.study_agent.start_session(user_id, content)
+            await message.channel.send(response)
+            return
 
-        if term:
-            intro = "✅ Got it! Next question:" if user_id in self.study_agent.sessions else response
-            await message.channel.send(f"{intro}\nWhat does **'{term}'** mean?")
+        session = self.study_agent.sessions[user_id]
+
+
+        # set mode
+        if session.get("setup"):
+            self.logger.info(f"Setting mode for user {user_id}")
+            response = self.study_agent.set_study_format(user_id, content)
+            await message.channel.send(response)
+
+            # first question
+            cur_term = self.study_agent.get_current_term(user_id)
+            if cur_term:
+               if session["format"] == "Multiple Choice":
+                mcq_data = self.study_agent.generate_multiple_choice_question(
+                    cur_term)
+                session["mcq_options"] = mcq_data["options"]
+                formatted_options = "\n".join(
+                    [f"{i + 1}. {option}" for i,
+                        option in enumerate(session["mcq_options"])]
+                )
+
+                await message.channel.send(f"**Next question:**\n{mcq_data['question']}")
+                await message.channel.send(f"**Options:**\n{formatted_options}")
+            else:
+                await message.channel.send(f"\nNext question:\nWhat does **'{cur_term}'** mean?")
+            return
+
+        # rest of the questions
+        term = self.study_agent.get_current_term(user_id)
+        mcq_options = session.get(
+            "mcq_options") if session["format"] == "Multiple Choice" else None
+
+        response = self.study_agent.check_answer(user_id, term, content, mcq_options)
+        await message.channel.send(response)
+
+        next_term = self.study_agent.next_term(user_id)
+        if next_term:
+            if session["format"] == "Multiple Choice":
+                mcq_data = self.study_agent.generate_multiple_choice_question(
+                    next_term)
+                session["mcq_options"] = mcq_data["options"]
+                formatted_options = "\n".join(
+                    [f"{i + 1}. {option}" for i,
+                        option in enumerate(session["mcq_options"])]
+                )
+
+                await message.channel.send(f"**Next question:**\n{mcq_data['question']}")
+                await message.channel.send(f"**Options:**\n{formatted_options}")
+            else:
+                await message.channel.send(f"\nNext question:\nWhat does **'{next_term}'** mean?")
         else:
-            await message.channel.send("🎉 Study session complete! Great job!")
+            await message.channel.send("\n🎉 Study session complete! Great job!")
 
 if __name__ == "__main__":
     DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")

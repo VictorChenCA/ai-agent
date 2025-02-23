@@ -7,6 +7,7 @@ load_dotenv()
 
 import logging
 import colorlog
+import pdfplumber
 logger = logging.getLogger("agent")  # log agent messages
 logger.setLevel(logging.ERROR)
 console_handler = logging.StreamHandler()
@@ -61,19 +62,23 @@ class StudyAgent:
             return {"terms": [], "subject": ""}
 
     def start_session(self, user_id, user_message):
-        extracted = self.extract_terms_and_subject(user_message)
-        terms = extracted.get("terms", [])
-        subject = extracted.get("subject", "")
-        setup = True
+        if user_id in self.sessions and "terms" in self.sessions[user_id]:
+            # Use existing terms from PDF extraction
+            session = self.sessions[user_id]
+            terms = session["terms"]
+            subject = session.get("subject", "")
+        else:
+            # Extract terms from user message
+            extracted = self.extract_terms_and_subject(user_message)
+            terms = extracted.get("terms", [])
+            subject = extracted.get("subject", "")
+            if not terms:
+                return None, "⚠️ I couldn't extract any study terms. Please list them clearly."
 
-        if not terms:
-            return None, "⚠️ I couldn't extract any study terms. Please list them clearly."
+            self.sessions[user_id] = {"terms": terms, "current_term": 0, "subject": subject}
 
-        self.sessions[user_id] = {"terms": terms,
-                                  "current_term": 0, "subject": subject, "setup": True}
-        confirmation_message = self.generate_custom_confirmation(
-            terms, subject)
-        
+        self.sessions[user_id]["setup"] = True
+        confirmation_message = self.generate_custom_confirmation(terms, subject)
         format_message = (
             "First, select your mode: \n"
             "Free Response: answer in your own words. \n"
@@ -110,8 +115,7 @@ class StudyAgent:
 
 
     def set_study_format(self, user_id, user_message):
-        extracted_format = self.extract_format(
-            user_message)  # Extracts format from user message
+        extracted_format = self.extract_format(user_message)
 
         if user_id not in self.sessions or "setup" not in self.sessions[user_id]:
             return "⚠️ No active study session found. Please start a session first."
@@ -119,6 +123,13 @@ class StudyAgent:
         if extracted_format not in ["Free Response", "Multiple Choice"]:
             return "⚠️ Invalid format. Please choose either 'Free Response' or 'Multiple Choice'."
 
+        session = self.sessions[user_id]
+        if "study_terms" in session and session["study_terms"]:
+            self.sessions[user_id]["format"] = extracted_format
+            self.sessions[user_id]["setup"] = False
+
+            return f"You have chosen the {extracted_format} format using extracted study terms. Let's get started!"
+        
         self.sessions[user_id]["format"] = extracted_format
         self.sessions[user_id]["setup"] = False
 
@@ -126,15 +137,20 @@ class StudyAgent:
 
     def get_current_term(self, user_id):
         session = self.sessions.get(user_id)
-        return session["terms"][session["current_term"]] if session else None
+        if not session:
+            return None
+        num_questions = session.get('num_questions', len(session["terms"]))
+        return session["terms"][session["current_term"]] if session["current_term"] < num_questions else None
 
     def next_term(self, user_id):
         session = self.sessions.get(user_id)
         if not session:
             return None
 
+        num_questions = session.get('num_questions', len(session["terms"]))
         session["current_term"] += 1
-        if session["current_term"] >= len(session["terms"]):
+        
+        if session["current_term"] >= num_questions:
             del self.sessions[user_id]
             return None
         return session["terms"][session["current_term"]]
@@ -231,3 +247,66 @@ class StudyAgent:
         except Exception as e:
             logging.error(f"Error communicating with MistralAI: {str(e)}")
             return "⚠️ Error evaluating the response. Please try again."
+        
+
+    def process_pdf(self, pdf_path):
+        if not os.path.exists(pdf_path):
+            logger.error(f"❌ PDF file not found at path: {pdf_path}")
+            return "❌ Error: PDF file not found."
+
+        extracted_text = ""
+
+        try:
+            with pdfplumber.open(pdf_path) as pdf:           
+                for i, page in enumerate(pdf.pages):
+                    page_text = page.extract_text()
+
+                    if page_text:
+                        extracted_text += page_text + "\n"
+
+            if not extracted_text.strip():
+                return "⚠ No readable text found in the PDF."
+
+            return extracted_text
+
+        except Exception as e:
+            return "❌ An error occurred while processing the PDF."
+        
+    
+    def extract_study_terms(self, user_id, text):
+        """Uses Mistral AI to extract key study terms and stores them in the session."""
+        prompt = (
+            f"Extract exactly {self.sessions[user_id].get('num_questions', 10)} important single-word or short-phrase terms from the following text.\n\n"
+            f"{text}\n\n"
+            "Requirements:\n"
+            "1. Terms should be 1-3 words maximum\n"
+            "2. Avoid full sentences or numbered items\n"
+            "3. Focus on key technical terms or concepts\n\n"
+            "Return only the list of terms, one per line"
+        )
+
+        try:
+            messages = [{"role": "system", "content": prompt}]
+            response = self.mistral.chat.complete(
+                model=MISTRAL_MODEL,
+                messages=messages
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            terms = response_text.split("\n") if response_text else []
+            
+            if user_id not in self.sessions:
+                self.sessions[user_id] = {}
+
+            self.sessions[user_id].update({
+                "terms": terms,
+                "current_term": 0,
+                "format": None,
+                "setup": True
+            })
+
+            return terms
+
+        except Exception as e:
+            logger.error(f"Error calling Mistral AI: {e}")
+            return ["❌ An error occurred while processing the text."]

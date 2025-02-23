@@ -7,6 +7,7 @@ from agent import StudyAgent # load our agent.py class
 import logging # other imports
 import platform
 import os
+import aiohttp
 
 from dotenv import load_dotenv # load environment variables
 load_dotenv()
@@ -21,6 +22,9 @@ logger.setLevel(logging.INFO)
 
 PREFIX = "!"
 CUSTOM_STATUS = "you not study"
+
+# Global for PDF handling
+pending_extractions = {}
 
 
 class DiscordBot(commands.Bot):
@@ -46,14 +50,91 @@ class DiscordBot(commands.Bot):
         await self.process_commands(message)
         self.logger.info(f"Message from {message.author}: {message.content}")
 
-        # ignore messages from self or bots
+        # Ignore messages from self, bots, or commands
         if message.author == self.user or message.author.bot or message.content.startswith("!"):
             return
 
         user_id = message.author.id
         content = message.content.strip()
 
-        # new session
+        # **Handle PDF Uploads**
+        if message.attachments:
+            for attachment in message.attachments:
+                if attachment.filename.lower().endswith(".pdf"):
+                    await message.channel.send(
+                        f"📄 I detected a PDF file: `{attachment.filename}`. Would you like me to extract study terms from it? Reply with `yes` or `no`."
+                    )
+
+                    file_path = f"./temp/{attachment.filename}"
+                    os.makedirs("./temp", exist_ok=True)
+
+                    try:
+                        async with aiohttp.ClientSession() as session:
+                            async with session.get(attachment.url) as resp:
+                                if resp.status == 200:
+                                    with open(file_path, "wb") as f:
+                                        f.write(await resp.read())
+
+                        if not os.path.exists(file_path):
+                            logger.error(f"❌ File was not saved correctly: {file_path}")
+                            await message.channel.send("❌ Error saving file. Please try again.")
+                            return
+
+                        logger.info(f"✅ PDF successfully saved at: {file_path}")
+
+                    except Exception as e:
+                        logger.error(f"❌ Error downloading file: {e}")
+                        await message.channel.send("❌ Error downloading file. Please try again.")
+                        return
+
+                    pending_extractions[user_id] = file_path
+                    return  
+
+        # **Handle PDF Processing Confirmation**
+        if user_id in pending_extractions and content.lower() in ["yes", "y"]:
+            pdf_path = pending_extractions.pop(user_id)
+            await message.channel.send("🔍 Extracting study terms from your document... Please wait.")
+            logger.info(f"🔍 Calling process_pdf() with path: {pdf_path}")
+            extracted_text = self.study_agent.process_pdf(pdf_path)
+
+            if extracted_text.startswith("⚠") or extracted_text.startswith("❌"):
+                await message.channel.send(extracted_text)
+                return
+
+            self.study_agent.sessions[user_id] = {
+                "extracted_text": extracted_text,
+                "awaiting_question_count": True
+            }
+            
+            await message.channel.send("✅ Extraction complete! How many questions would you like to study? (Enter a number)")
+            return
+
+        elif user_id in pending_extractions and content.lower() in ["no", "n"]:
+            pending_extractions.pop(user_id)
+            await message.channel.send("❌ PDF processing canceled.")
+            return
+
+        if "awaiting_question_count" in self.study_agent.sessions.get(user_id, {}):
+            try:
+                num_questions = int(content)
+                if num_questions <= 0:
+                    await message.channel.send("⚠ Please enter a positive number.")
+                    return
+                    
+                session = self.study_agent.sessions[user_id]
+                session["num_questions"] = num_questions
+                extracted_text = session.pop("extracted_text")
+                del session["awaiting_question_count"]
+                
+                terms = self.study_agent.extract_study_terms(user_id, extracted_text)
+                response = self.study_agent.start_session(user_id, "") # Reuse existing flow
+                await message.channel.send(response)
+                return
+            except ValueError:
+                await message.channel.send("⚠ Please enter a valid number.")
+                return
+
+        # **New Study Session Handling**
         if user_id not in self.study_agent.sessions:
             self.logger.info(f"Starting study session for user {user_id}")
             response = self.study_agent.start_session(user_id, content)
@@ -62,35 +143,31 @@ class DiscordBot(commands.Bot):
 
         session = self.study_agent.sessions[user_id]
 
-
-        # set mode
+        # **Handle Study Format Selection**
         if session.get("setup"):
             self.logger.info(f"Setting mode for user {user_id}")
             response = self.study_agent.set_study_format(user_id, content)
             await message.channel.send(response)
 
-            # first question
-            cur_term = self.study_agent.get_current_term(user_id)
-            if cur_term:
-               if session["format"] == "Multiple Choice":
-                mcq_data = self.study_agent.generate_multiple_choice_question(
-                    cur_term)
-                session["mcq_options"] = mcq_data["options"]
-                formatted_options = "\n".join(
-                    [f"{i + 1}. {option}" for i,
-                        option in enumerate(session["mcq_options"])]
-                )
+            if "format" in session:
+                cur_term = self.study_agent.get_current_term(user_id)
+                if cur_term:
+                    if session["format"] == "Multiple Choice":
+                        mcq_data = self.study_agent.generate_multiple_choice_question(cur_term)
+                        session["mcq_options"] = mcq_data["options"]
+                        formatted_options = "\n".join(
+                            [f"{i + 1}. {option}" for i, option in enumerate(session["mcq_options"])]
+                        )
 
-                await message.channel.send(f"**Next question:**\n{mcq_data['question']}")
-                await message.channel.send(f"**Options:**\n{formatted_options}")
-            else:
-                await message.channel.send(f"\nNext question:\nWhat does **'{cur_term}'** mean?")
+                        await message.channel.send(f"**First question:**\n{mcq_data['question']}")
+                        await message.channel.send(f"**Options:**\n{formatted_options}")
+                    else:
+                        await message.channel.send(f"\nFirst question:\nWhat does **'{cur_term}'** mean?")
             return
 
-        # rest of the questions
+        # **Handle Answer Checking and Next Question**
         term = self.study_agent.get_current_term(user_id)
-        mcq_options = session.get(
-            "mcq_options") if session["format"] == "Multiple Choice" else None
+        mcq_options = session.get("mcq_options") if session["format"] == "Multiple Choice" else None
 
         response = self.study_agent.check_answer(user_id, term, content, mcq_options)
         await message.channel.send(response)
@@ -98,12 +175,10 @@ class DiscordBot(commands.Bot):
         next_term = self.study_agent.next_term(user_id)
         if next_term:
             if session["format"] == "Multiple Choice":
-                mcq_data = self.study_agent.generate_multiple_choice_question(
-                    next_term)
+                mcq_data = self.study_agent.generate_multiple_choice_question(next_term)
                 session["mcq_options"] = mcq_data["options"]
                 formatted_options = "\n".join(
-                    [f"{i + 1}. {option}" for i,
-                        option in enumerate(session["mcq_options"])]
+                    [f"{i + 1}. {option}" for i, option in enumerate(session["mcq_options"])]
                 )
 
                 await message.channel.send(f"**Next question:**\n{mcq_data['question']}")

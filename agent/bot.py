@@ -72,8 +72,9 @@ class DiscordBot(commands.Bot):
             await message.channel.send("🎉 Study session complete! Great job!")
 
 if __name__ == "__main__":
-    load_dotenv()
-    token = os.getenv("DISCORD_TOKEN")
-
-    bot = DiscordBot()
-    bot.run(token)
+    DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
+    if DISCORD_TOKEN:
+        bot = DiscordBot()
+        bot.run(DISCORD_TOKEN)
+    else:
+        logger.error("DISCORD_TOKEN not set.")

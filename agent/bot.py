@@ -161,6 +161,10 @@ class DiscordBot(commands.Bot):
 
                         await message.channel.send(f"**First question:**\n{mcq_data['question']}")
                         await message.channel.send(f"**Options:**\n{formatted_options}")
+
+                    elif session["format"] == "Fill-in-the-Blank":
+                        question = self.study_agent.generate_fill_in_the_blank_question(cur_term)
+                        await message.channel.send(f"\nFirst question:\n{question}")
                     else:
                         await message.channel.send(f"\nFirst question:\nWhat does **'{cur_term}'** mean?")
             return
@@ -183,6 +187,9 @@ class DiscordBot(commands.Bot):
 
                 await message.channel.send(f"**Next question:**\n{mcq_data['question']}")
                 await message.channel.send(f"**Options:**\n{formatted_options}")
+            elif session["format"] == "Fill-in-the-Blank":
+                question = self.study_agent.generate_fill_in_the_blank_question(next_term)
+                await message.channel.send(f"**Next question:**\n{question}")
             else:
                 await message.channel.send(f"\nNext question:\nWhat does **'{next_term}'** mean?")
         else:

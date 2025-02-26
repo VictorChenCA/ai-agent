@@ -83,6 +83,7 @@ class StudyAgent:
             "First, select your mode: \n"
             "Free Response: answer in your own words. \n"
             "Multiple Choice: choose from four given options. \n"
+            "Fill-in-the-Blank: provide the missing term in the sentence. \n"
         )
         return f"{confirmation_message}\n{format_message}"
 
@@ -94,10 +95,10 @@ class StudyAgent:
         prompt = f"""
         Extract the study format from the following user message:
         {user_message}
-        The format should be either "Free Response" or "Multiple Choice".
+        The format should be either "Free Response" or "Multiple Choice" or "Fill-in-the-Blank"
         Respond in JSON format:
         {{
-        "format": "Free Response" or "Multiple Choice"
+        "format": "Free Response" or "Multiple Choice" or "Fill-in-the-Blank"
         }}
         """
 
@@ -120,8 +121,8 @@ class StudyAgent:
         if user_id not in self.sessions or "setup" not in self.sessions[user_id]:
             return "⚠️ No active study session found. Please start a session first."
 
-        if extracted_format not in ["Free Response", "Multiple Choice"]:
-            return "⚠️ Invalid format. Please choose either 'Free Response' or 'Multiple Choice'."
+        if extracted_format not in ["Free Response", "Multiple Choice", "Fill-in-the-Blank"]:
+            return "⚠️ Invalid format. Please choose 'Free Response', 'Multiple Choice', or 'Fill-in-the-Blank'."
 
         session = self.sessions[user_id]
         if "study_terms" in session and session["study_terms"]:
@@ -198,6 +199,23 @@ class StudyAgent:
             logging.error(f"Error generating distractors: {str(e)}")
             # Fallback
             return ["Incorrect definition 1", "Incorrect definition 2", "Incorrect definition 3"]
+        
+        
+    def generate_fill_in_the_blank_question(self, term):
+        prompt = f"""
+        Generate a fill-in-the-blank sentence where the blank is the term '{term}'. The sentence should provide enough context that the user can reasonably guess the correct term. Return only the sentence with the blank.
+        """
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            response = self.mistral.chat.complete(
+                model="mistral-tiny", messages=messages
+            )
+            sentence = response.choices[0].message.content.strip()
+            return sentence
+        except Exception as e:
+            logging.error(f"Error generating fill-in-the-blank sentence: {str(e)}")
+            return f"___ is an important term in this topic."
+
 
 
     def check_answer(self, user_id, term, user_answer, mcq_questions=None, correct_index=None):
@@ -227,6 +245,13 @@ class StudyAgent:
                 - ✅ "Correct!" if the answer is mostly accurate.
                 - ❌ "Incorrect" if it's wrong, followed by a brief explanation of why it's wrong. 
                 """
+
+            elif session["format"] == "Fill-in-the-Blank":
+                if user_answer.strip().lower() == term.lower():
+                    return "✅ Correct!"
+                return f"❌ Incorrect. The correct answer was: {term}" 
+            
+    
             else:
                 prompt = f"""
                 You are an AI tutor. The user was asked:

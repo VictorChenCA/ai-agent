@@ -61,22 +61,27 @@ class StudyAgent:
             logger.error(f"Error extracting terms and subject: {str(e)}")
             return {"terms": [], "subject": ""}
 
-    def start_session(self, user_id, user_message):
+    def start_session(self, user_id, user_message, subject=None):
         if user_id in self.sessions and "terms" in self.sessions[user_id]:
-            # Use existing terms from PDF extraction
             session = self.sessions[user_id]
             terms = session["terms"]
             subject = session.get("subject", "")
         else:
-            # Extract terms from user message
-            extracted = self.extract_terms_and_subject(user_message)
-            terms = extracted.get("terms", [])
-            subject = extracted.get("subject", "")
-            if not terms:
-                return None, "⚠️ I couldn't extract any study terms. Please list them clearly."
+            if subject:
+                terms = self.generate_terms_from_subject(subject)
+                if not terms:
+                    return "⚠️ I couldn't generate any study terms for the given subject."
+                self.sessions[user_id] = {
+                    "terms": terms, "current_term": 0, "subject": subject}
+            else:
+                extracted = self.extract_terms_and_subject(user_message)
+                terms = extracted.get("terms", [])
+                subject = extracted.get("subject", "")
+                if not terms:
+                    return "⚠️ I couldn't extract any study terms. Please list them clearly."
 
-            self.sessions[user_id] = {"terms": terms,
-                                      "current_term": 0, "subject": subject}
+                self.sessions[user_id] = {
+                    "terms": terms, "current_term": 0, "subject": subject}
 
         self.sessions[user_id]["setup"] = True
         confirmation_message = self.generate_custom_confirmation(
@@ -126,7 +131,7 @@ class StudyAgent:
             return "⚠️ Invalid format. Please choose 'Free Response', 'Multiple Choice', or 'Fill-in-the-Blank'."
 
         session = self.sessions[user_id]
-        if "study_terms" in session and session["study_terms"]:
+        if "terms" in session and session["terms"]:
             self.sessions[user_id]["format"] = extracted_format
             self.sessions[user_id]["setup"] = False
 
@@ -242,7 +247,7 @@ class StudyAgent:
 
                 Evaluate if the answer is correct. Respond with:
                 - ✅ "Correct!" if the answer is mostly accurate.
-                - ❌ "Incorrect" if it's wrong, followed by a brief explanation of why it's wrong. 
+                - ❌ "Incorrect" if it's wrong, followed by a brief explanation of why it's wrong.
                 """
 
             elif session["format"] == "Fill-in-the-Blank":
@@ -309,7 +314,7 @@ class StudyAgent:
         try:
             messages = [{"role": "system", "content": prompt}]
             response = self.mistral.chat.complete(
-                model=MISTRAL_MODEL,
+                model="mistral-tiny",
                 messages=messages
             )
 
@@ -331,3 +336,23 @@ class StudyAgent:
         except Exception as e:
             logger.error(f"Error calling Mistral AI: {e}")
             return ["❌ An error occurred while processing the text."]
+
+    def generate_terms_from_subject(self, subject):
+        prompt = f"Generate a list of 10 important study terms related to the subject '{subject}'. Each term should be 1-3 words maximum. Avoid full sentences. Focus on key technical terms or concepts. Return the terms as a list, one per line."
+
+        try:
+            messages = [{"role": "user", "content": prompt}]
+            response = self.mistral.chat.complete(
+                model=MISTRAL_MODEL,
+                messages=messages
+            )
+
+            response_text = response.choices[0].message.content.strip()
+            terms = [term.strip()
+                     for term in response_text.split("\n") if term.strip()]
+            terms = terms[:10]  # Limit to 10 terms
+            return terms
+
+        except Exception as e:
+            logger.error(f"Error generating terms from subject: {e}")
+            return []

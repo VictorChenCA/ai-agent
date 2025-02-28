@@ -1,3 +1,6 @@
+import pdfplumber
+import colorlog
+import logging
 from mistralai import Mistral
 
 import os
@@ -5,9 +8,6 @@ import random
 from dotenv import load_dotenv
 load_dotenv()
 
-import logging
-import colorlog
-import pdfplumber
 logger = logging.getLogger("agent")  # log agent messages
 logger.setLevel(logging.ERROR)
 console_handler = logging.StreamHandler()
@@ -75,10 +75,12 @@ class StudyAgent:
             if not terms:
                 return None, "⚠️ I couldn't extract any study terms. Please list them clearly."
 
-            self.sessions[user_id] = {"terms": terms, "current_term": 0, "subject": subject}
+            self.sessions[user_id] = {"terms": terms,
+                                      "current_term": 0, "subject": subject}
 
         self.sessions[user_id]["setup"] = True
-        confirmation_message = self.generate_custom_confirmation(terms, subject)
+        confirmation_message = self.generate_custom_confirmation(
+            terms, subject)
         format_message = (
             "First, select your mode: \n"
             "Free Response: answer in your own words. \n"
@@ -114,7 +116,6 @@ class StudyAgent:
             logger.error(f"Error extracting format: {str(e)}")
             return ""
 
-
     def set_study_format(self, user_id, user_message):
         extracted_format = self.extract_format(user_message)
 
@@ -130,7 +131,7 @@ class StudyAgent:
             self.sessions[user_id]["setup"] = False
 
             return f"You have chosen the {extracted_format} format using extracted study terms. Let's get started!"
-        
+
         self.sessions[user_id]["format"] = extracted_format
         self.sessions[user_id]["setup"] = False
 
@@ -150,7 +151,7 @@ class StudyAgent:
 
         num_questions = session.get('num_questions', len(session["terms"]))
         session["current_term"] += 1
-        
+
         if session["current_term"] >= num_questions:
             del self.sessions[user_id]
             return None
@@ -199,8 +200,7 @@ class StudyAgent:
             logging.error(f"Error generating distractors: {str(e)}")
             # Fallback
             return ["Incorrect definition 1", "Incorrect definition 2", "Incorrect definition 3"]
-        
-        
+
     def generate_fill_in_the_blank_question(self, term):
         prompt = f"""
         Generate a fill-in-the-blank sentence where the blank is the term '{term}'. The sentence should provide enough context that the user can reasonably guess the correct term. Return only the sentence with the blank.
@@ -213,10 +213,9 @@ class StudyAgent:
             sentence = response.choices[0].message.content.strip()
             return sentence
         except Exception as e:
-            logging.error(f"Error generating fill-in-the-blank sentence: {str(e)}")
+            logging.error(
+                f"Error generating fill-in-the-blank sentence: {str(e)}")
             return f"___ is an important term in this topic."
-
-
 
     def check_answer(self, user_id, term, user_answer, mcq_questions=None, correct_index=None):
         session = self.sessions.get(user_id)
@@ -229,7 +228,7 @@ class StudyAgent:
                 if user_answer.isdigit() and len(user_answer) == 1:
                     user_answer_text = mcq_questions[user_answer]
                 else:
-                    user_answer_text = user_answer 
+                    user_answer_text = user_answer
 
                 correct_answer = mcq_questions[correct_index] if correct_index is not None else mcq_questions[0]
 
@@ -249,9 +248,8 @@ class StudyAgent:
             elif session["format"] == "Fill-in-the-Blank":
                 if user_answer.strip().lower() == term.lower():
                     return "✅ Correct!"
-                return f"❌ Incorrect. The correct answer was: {term}" 
-            
-    
+                return f"❌ Incorrect. The correct answer was: {term}"
+
             else:
                 prompt = f"""
                 You are an AI tutor. The user was asked:
@@ -272,7 +270,6 @@ class StudyAgent:
         except Exception as e:
             logging.error(f"Error communicating with MistralAI: {str(e)}")
             return "⚠️ Error evaluating the response. Please try again."
-        
 
     def process_pdf(self, pdf_path):
         if not os.path.exists(pdf_path):
@@ -282,7 +279,7 @@ class StudyAgent:
         extracted_text = ""
 
         try:
-            with pdfplumber.open(pdf_path) as pdf:           
+            with pdfplumber.open(pdf_path) as pdf:
                 for i, page in enumerate(pdf.pages):
                     page_text = page.extract_text()
 
@@ -296,8 +293,7 @@ class StudyAgent:
 
         except Exception as e:
             return "❌ An error occurred while processing the PDF."
-        
-    
+
     def extract_study_terms(self, user_id, text):
         """Uses Mistral AI to extract key study terms and stores them in the session."""
         prompt = (
@@ -319,7 +315,7 @@ class StudyAgent:
 
             response_text = response.choices[0].message.content.strip()
             terms = response_text.split("\n") if response_text else []
-            
+
             if user_id not in self.sessions:
                 self.sessions[user_id] = {}
 

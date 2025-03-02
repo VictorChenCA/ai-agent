@@ -203,7 +203,10 @@ class StudyAgent:
         
     def generate_fill_in_the_blank_question(self, term):
         prompt = f"""
-        Generate a fill-in-the-blank sentence where the blank is the term '{term}'. The sentence should provide enough context that the user can reasonably guess the correct term. Return only the sentence with the blank.
+        Generate a fill-in-the-blank sentence where the blank is the term '{term}'. The sentence 
+        should provide enough context that the user can reasonably guess the correct term. Return
+        only the sentence with the blank. The blank should be represented as '**___**', with the number
+        of underscores used equivalent to half the number of letters in the word. The blank is be in bold.
         """
         try:
             messages = [{"role": "user", "content": prompt}]

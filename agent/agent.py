@@ -308,16 +308,16 @@ class StudyAgent:
             f"Extract exactly {self.sessions[user_id].get('num_questions', 10)} important single-word or short-phrase terms from the following text.\n\n"
             f"{text}\n\n"
             "Requirements:\n"
-            "1. Terms should be 1-3 words maximum\n"
-            "2. Avoid full sentences or numbered items\n"
-            "3. Focus on key technical terms or concepts\n\n"
-            "Return only the list of terms, one per line"
+            "1. Terms should be 1-3 words maximum.\n"
+            "2. Avoid full sentences or numbered items.\n"
+            "3. Focus on key technical terms or concepts.\n"
+            "4. Return ONLY the list of terms, **one term per line** (do NOT use commas).\n"
         )
 
         try:
             messages = [{"role": "system", "content": prompt}]
             response = self.mistral.chat.complete(
-                model="mistral-tiny",
+                model=MISTRAL_MODEL,
                 messages=messages
             )
 

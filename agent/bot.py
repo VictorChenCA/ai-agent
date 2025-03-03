@@ -88,7 +88,11 @@ class DiscordBot(commands.Bot):
                         return
 
                     pending_extractions[user_id] = file_path
-                    return  
+                    return 
+                else:
+                    await message.channel.send("❌ Sorry, I only support PDF files for study term extraction.")
+                    return
+
 
         # **Handle PDF Processing Confirmation**
         if user_id in pending_extractions and content.lower() in ["yes", "y"]:

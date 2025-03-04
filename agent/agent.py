@@ -67,8 +67,9 @@ class StudyAgent:
             terms = session["terms"]
             subject = session.get("subject", "")
         else:
-            if subject:
-                terms = self.generate_terms_from_subject(subject)
+            if subject:  # If a subject is provided
+                terms = self.generate_terms_from_subject(
+                    subject)
                 if not terms:
                     return "⚠️ I couldn't generate any study terms for the given subject."
                 self.sessions[user_id] = {
@@ -80,19 +81,16 @@ class StudyAgent:
                 if not terms:
                     return "⚠️ I couldn't extract any study terms. Please list them clearly."
 
-                self.sessions[user_id] = {
-                    "terms": terms, "current_term": 0, "subject": subject}
-
-        self.sessions[user_id]["setup"] = True
-        confirmation_message = self.generate_custom_confirmation(
-            terms, subject)
-        format_message = (
-            "First, select your mode: \n"
-            "Free Response: answer in your own words. \n"
-            "Multiple Choice: choose from four given options. \n"
-            "Fill-in-the-Blank: provide the missing term in the sentence. \n"
-        )
-        return f"{confirmation_message}\n{format_message}"
+            self.sessions[user_id]["setup"] = True
+            confirmation_message = self.generate_custom_confirmation(
+                terms, subject)
+            format_message = (
+                "First, select your mode: \n"
+                "Free Response: answer in your own words. \n"
+                "Multiple Choice: choose from four given options. \n"
+                "Fill-in-the-Blank: provide the missing term in the sentence. \n"
+            )
+            return f"{confirmation_message}\n{format_message}"
 
     def generate_custom_confirmation(self, terms, subject):
         subject_text = f"{subject}" if subject else ""

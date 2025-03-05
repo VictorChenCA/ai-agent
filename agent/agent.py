@@ -80,8 +80,11 @@ class StudyAgent:
                 if not terms:
                     return "⚠️ I couldn't extract any study terms. Please list them clearly."
 
+                random.shuffle(terms)  # Randomize the order of terms
                 self.sessions[user_id] = {
                     "terms": terms, "current_term": 0, "subject": subject}
+
+
 
         self.sessions[user_id]["setup"] = True
         confirmation_message = self.generate_custom_confirmation(
@@ -131,15 +134,8 @@ class StudyAgent:
             return "⚠️ Invalid format. Please choose 'Free Response', 'Multiple Choice', or 'Fill-in-the-Blank'."
 
         session = self.sessions[user_id]
-        if "terms" in session and session["terms"]:
-            self.sessions[user_id]["format"] = extracted_format
-            self.sessions[user_id]["setup"] = False
-
-            return f"You have chosen the {extracted_format} format using extracted study terms. Let's get started!"
-
-        self.sessions[user_id]["format"] = extracted_format
-        self.sessions[user_id]["setup"] = False
-
+        session["format"] = extracted_format
+        session["setup"] = False
         return f"You have chosen the {extracted_format} format. Let's get started!"
 
     def get_current_term(self, user_id):

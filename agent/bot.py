@@ -26,6 +26,7 @@ CUSTOM_STATUS = "you learn | @QuizAI"
 # Globals
 pending_extractions = {}
 bot = commands.Bot(command_prefix='!', intents=intents)
+ctx = None
 
 class DiscordBot(commands.Bot):
     def __init__(self):
@@ -47,6 +48,8 @@ class DiscordBot(commands.Bot):
         )
 
     async def on_message(self, message: discord.Message):
+        global ctx
+        ctx = await bot.get_context(message)
         await self.process_commands(message)
         self.logger.info(f"Message from {message.author}: {message.content}")
 
@@ -56,7 +59,6 @@ class DiscordBot(commands.Bot):
 
         # Handle @QuizAI mention
         if self.user.mentioned_in(message):
-            ctx = await bot.get_context(message)
             await self.show_help(self, ctx)
             return
 
@@ -67,7 +69,7 @@ class DiscordBot(commands.Bot):
         if message.attachments:
             for attachment in message.attachments:
                 if attachment.filename.lower().endswith(".pdf"):
-                    await message.channel.send(
+                    await ctx.send(
                         f"📄 I detected a PDF file: `{attachment.filename}`. Would you like me to extract study terms from it? Reply with `yes` or `no`."
                     )
 
@@ -83,32 +85,32 @@ class DiscordBot(commands.Bot):
 
                         if not os.path.exists(file_path):
                             logger.error(f"❌ File was not saved correctly: {file_path}")
-                            await message.channel.send("❌ Error saving file. Please try again.")
+                            await ctx.send("❌ Error saving file. Please try again.")
                             return
 
                         logger.info(f"✅ PDF successfully saved at: {file_path}")
 
                     except Exception as e:
                         logger.error(f"❌ Error downloading file: {e}")
-                        await message.channel.send("❌ Error downloading file. Please try again.")
+                        await ctx.send("❌ Error downloading file. Please try again.")
                         return
 
                     pending_extractions[user_id] = file_path
                     return 
                 else:
-                    await message.channel.send("❌ Sorry, I only support PDF files for study term extraction.")
+                    await ctx.send("❌ Sorry, I only support PDF files for study term extraction.")
                     return
 
 
         # **Handle PDF Processing Confirmation**
         if user_id in pending_extractions and content.lower() in ["yes", "y"]:
             pdf_path = pending_extractions.pop(user_id)
-            await message.channel.send("🔍 Extracting study terms from your document... Please wait.")
+            await ctx.send("🔍 Extracting study terms from your document... Please wait.")
             logger.info(f"🔍 Calling process_pdf() with path: {pdf_path}")
             extracted_text = self.study_agent.process_pdf(pdf_path)
 
             if extracted_text.startswith("⚠") or extracted_text.startswith("❌"):
-                await message.channel.send(extracted_text)
+                await ctx.send(extracted_text)
                 return
 
             self.study_agent.sessions[user_id] = {
@@ -116,19 +118,19 @@ class DiscordBot(commands.Bot):
                 "awaiting_question_count": True
             }
             
-            await message.channel.send("✅ Extraction complete! How many questions would you like to study? (Enter a number)")
+            await ctx.send("✅ Extraction complete! How many questions would you like to study? (Enter a number)")
             return
 
         elif user_id in pending_extractions and content.lower() in ["no", "n"]:
             pending_extractions.pop(user_id)
-            await message.channel.send("❌ PDF processing canceled.")
+            await ctx.send("❌ PDF processing canceled.")
             return
 
         if "awaiting_question_count" in self.study_agent.sessions.get(user_id, {}):
             try:
                 num_questions = int(content)
                 if num_questions <= 0:
-                    await message.channel.send("⚠ Please enter a positive number.")
+                    await ctx.send("⚠ Please enter a positive number.")
                     return
                     
                 session = self.study_agent.sessions[user_id]
@@ -138,17 +140,17 @@ class DiscordBot(commands.Bot):
                 
                 terms = self.study_agent.extract_study_terms(user_id, extracted_text)
                 response = self.study_agent.start_session(user_id, "") # Reuse existing flow
-                await message.channel.send(response)
+                await ctx.send(response)
                 return
             except ValueError:
-                await message.channel.send("⚠ Please enter a valid number.")
+                await ctx.send("⚠ Please enter a valid number.")
                 return
 
         # **New Study Session Handling**
         if user_id not in self.study_agent.sessions:
             self.logger.info(f"Starting study session for user {user_id}")
             response = self.study_agent.start_session(user_id, content)
-            await message.channel.send(response)
+            await ctx.send(response)
             return
 
         session = self.study_agent.sessions[user_id]
@@ -157,7 +159,7 @@ class DiscordBot(commands.Bot):
         if session.get("setup"):
             self.logger.info(f"Setting mode for user {user_id}")
             response = self.study_agent.set_study_format(user_id, content)
-            await message.channel.send(response)
+            await ctx.send(response)
 
             if "format" in session:
                 cur_term = self.study_agent.get_current_term(user_id)
@@ -169,14 +171,15 @@ class DiscordBot(commands.Bot):
                             [f"{i + 1}. {option}" for i, option in enumerate(session["mcq_options"])]
                         )
 
-                        await message.channel.send(f"**First question:**\n{mcq_data['question']}")
-                        await message.channel.send(f"**Options:**\n{formatted_options}")
+                        await ctx.send(f"**First question:**\n{mcq_data['question']}")
+                        await ctx.send(f"**Options:**\n{formatted_options}")
 
                     elif session["format"] == "Fill-in-the-Blank":
                         question = self.study_agent.generate_fill_in_the_blank_question(cur_term)
-                        await message.channel.send(f"\nFirst question:\n{question}")
+                        await ctx.send(f"\nFirst question:\n{question}")
                     else:
-                        await message.channel.send(f"\nFirst question:\nWhat does **'{cur_term}'** mean?")
+                        await ctx.send(f"\nFirst question:\n")
+                        await ctx.send(f">>> What does **'{cur_term}'** mean?")
             return
 
         # **Handle Answer Checking and Next Question**
@@ -184,7 +187,7 @@ class DiscordBot(commands.Bot):
         mcq_options = session.get("mcq_options") if session["format"] == "Multiple Choice" else None
 
         response = self.study_agent.check_answer(user_id, term, content, mcq_options)
-        await message.channel.send(response)
+        await ctx.send(response)
 
         next_term = self.study_agent.next_term(user_id)
         if next_term:
@@ -195,15 +198,16 @@ class DiscordBot(commands.Bot):
                     [f"{i + 1}. {option}" for i, option in enumerate(session["mcq_options"])]
                 )
 
-                await message.channel.send(f"**Next question:**\n{mcq_data['question']}")
-                await message.channel.send(f"**Options:**\n{formatted_options}")
+                await ctx.send(f">>> **Next question:**\n{mcq_data['question']}")
+                await ctx.send(f">>> **Options:**\n{formatted_options}")
             elif session["format"] == "Fill-in-the-Blank":
                 question = self.study_agent.generate_fill_in_the_blank_question(next_term)
-                await message.channel.send(f"**Next question:**\n{question}")
+                await ctx.send(f">>> **Next question:**\n{question}")
             else:
-                await message.channel.send(f"\nNext question:\nWhat does **'{next_term}'** mean?")
+                await ctx.send(f"\nNext question:\n")
+                await ctx.send(f">>> What does **'{next_term}'** mean?")
         else:
-            await message.channel.send("\n🎉 Study session complete! Great job!")
+            await ctx.send("\n🎉 Study session complete! Great job!")
 
     @commands.command(name="help")
     async def show_help(self, ctx):
@@ -212,7 +216,7 @@ class DiscordBot(commands.Bot):
             "I can help you study using flashcards in various formats!\n\n"
             "Commands:\n"
             "`@QuizAI` - Show this help message.\n\n"
-            "To start a study session, simply send any message with the terms you want to study (comma seperated).\n"
+            "To start a study session, simply send any message with the terms you want to study (comma separated).\n"
             "You can also upload a PDF file, and I will extract study terms from it.\n\n"
             "After starting a session, you can choose the study format:\n"
             "- Free Response\n"

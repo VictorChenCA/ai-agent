@@ -1,9 +1,7 @@
 import pdfplumber
 import colorlog
 import logging
-from rapidfuzz import fuzz
 from mistralai import Mistral
-
 
 import os
 import random
@@ -252,14 +250,10 @@ class StudyAgent:
                 """
 
             elif session["format"] == "Fill-in-the-Blank":
-                user_answer = user_answer.strip().lower()
-                term = term.lower()
-
-                similarity = fuzz.ratio(user_answer, term)
-
-                if similarity > 85:  # Allows some typos, but keeps accuracy
+                if user_answer.strip().lower() == term.lower():
                     return "✅ Correct!"
                 return f"❌ Incorrect. The correct answer was: {term}"
+
             else:
                 prompt = f"""
                 You are an AI tutor. The user was asked:

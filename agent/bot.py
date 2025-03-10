@@ -21,11 +21,11 @@ logger = logging.getLogger("discord") # log discord messages
 logger.setLevel(logging.INFO)
 
 PREFIX = "!"
-CUSTOM_STATUS = "you not study"
+CUSTOM_STATUS = "you learn | @QuizAI"
 
-# Global for PDF handling
+# Globals
 pending_extractions = {}
-
+bot = commands.Bot(command_prefix='!', intents=intents)
 
 class DiscordBot(commands.Bot):
     def __init__(self):
@@ -51,7 +51,13 @@ class DiscordBot(commands.Bot):
         self.logger.info(f"Message from {message.author}: {message.content}")
 
         # Ignore messages from self, bots, or commands
-        if message.author == self.user or message.author.bot or message.content.startswith("!"):
+        if message.author == self.user or message.author.bot:
+            return
+
+        # Handle @QuizAI mention
+        if self.user.mentioned_in(message):
+            ctx = await bot.get_context(message)
+            await self.show_help(self, ctx)
             return
 
         user_id = message.author.id
@@ -198,6 +204,22 @@ class DiscordBot(commands.Bot):
                 await message.channel.send(f"\nNext question:\nWhat does **'{next_term}'** mean?")
         else:
             await message.channel.send("\n🎉 Study session complete! Great job!")
+
+    @commands.command(name="help")
+    async def show_help(self, ctx):
+        help_message = (
+            ">>> **QuizAI Help Guide**\n"
+            "I can help you study using flashcards in various formats!\n\n"
+            "Commands:\n"
+            "`@QuizAI` - Show this help message.\n\n"
+            "To start a study session, simply send any message with the terms you want to study (comma seperated).\n"
+            "You can also upload a PDF file, and I will extract study terms from it.\n\n"
+            "After starting a session, you can choose the study format:\n"
+            "- Free Response\n"
+            "- Multiple Choice\n"
+            "- Fill-in-the-Blank\n"
+        )
+        await ctx.send(help_message)
 
 if __name__ == "__main__":
     DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")

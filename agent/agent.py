@@ -10,6 +10,7 @@ load_dotenv()
 
 logger = logging.getLogger("agent")  # log agent messages
 logger.setLevel(logging.ERROR)
+logging.basicConfig(level=logging.DEBUG)
 console_handler = logging.StreamHandler()
 console_handler.setLevel(logging.INFO)
 formatter = colorlog.ColoredFormatter(
@@ -157,7 +158,7 @@ class StudyAgent:
             del self.sessions[user_id]
             return None
         return session["terms"][session["current_term"]]
-
+    
     def generate_multiple_choice_question(self, term):
         question = f"What does '{term}' mean?"
 
@@ -165,7 +166,10 @@ class StudyAgent:
         distractors = self.generate_distractors(term)
 
         options = [correct_answer] + distractors
+        logging.debug(f"Options before shuffle: {options}")
+
         random.shuffle(options)
+        logging.debug(f"Options after shuffle: {options}")
 
         correct_index = options.index(correct_answer)
 
@@ -175,8 +179,9 @@ class StudyAgent:
             "correct_answer": correct_index
         }
 
+
     def generate_correct_answer(self, term):
-        prompt = f"Generate an incredibly succinct and short definition for the term '{term}'. Maximum 10 words."
+        prompt = f"Generate an incredibly succinct and short definition for the term '{term}'. Make it a complete sentence."
         try:
             messages = [{"role": "user", "content": prompt}]
             response = self.mistral.chat.complete(
@@ -189,18 +194,28 @@ class StudyAgent:
             return "Correct definition not available."
 
     def generate_distractors(self, term):
-        prompt = f"Generate three incredibly succinct and short incorrect definitions for the term '{term}'. They should be plausible, but incorrect. Maximum 10 words each. Do not number each entry."
+        prompt = f"""Generate three succinct and incorrect definitions for the term '{term}'.
+Each should be plausible but wrong. 
+Return only the definitions as plain text, each on a new line. 
+Do NOT number them or include any list formatting (e.g., no dashes, no bullets)."""
         try:
             messages = [{"role": "user", "content": prompt}]
             response = self.mistral.chat.complete(
                 model="mistral-tiny",
                 messages=messages
             )
-            return response.choices[0].message.content.strip().split('\n')
+            response_text = response.choices[0].message.content.strip()
+
+            # Ensure clean output by stripping unwanted characters
+            distractors = [d.strip("-•1234567890. ") for d in response_text.split("\n") if d.strip()]
+
+            # Ensure we return exactly 3 clean distractors
+            distractors = [d.strip("- ").strip() for d in distractors if d.strip()]
+            return distractors[:3]  # Ensures we never return more than 3
         except Exception as e:
             logging.error(f"Error generating distractors: {str(e)}")
-            # Fallback
             return ["Incorrect definition 1", "Incorrect definition 2", "Incorrect definition 3"]
+
 
     def generate_fill_in_the_blank_question(self, term):
         prompt = f"""
@@ -229,25 +244,18 @@ class StudyAgent:
 
         try:
             if session["format"] == "Multiple Choice" and mcq_questions:
-                if user_answer.isdigit() and len(user_answer) == 1:
-                    user_answer_text = mcq_questions[user_answer]
+                print("WHAT", mcq_questions)
+                if user_answer.isdigit() and 1 <= int(user_answer) <= len(mcq_questions):
+                    user_answer_index = int(user_answer) - 1  # Convert to 0-based index
                 else:
-                    user_answer_text = user_answer
+                    return "❌ Please enter a valid number corresponding to an answer choice."
+                
+                correct_index = correct_index if correct_index is not None else 0  # Default to first option
+                if user_answer_index == correct_index:
+                    return "✅ Correct!"
+                else:
+                    return f"❌ Incorrect! The correct answer was: {mcq_questions[correct_index]}"
 
-                correct_answer = mcq_questions[correct_index] if correct_index is not None else mcq_questions[0]
-
-                prompt = f"""
-                You are an AI tutor. The user was asked:
-                'What does {term} mean?'
-
-                The user's answer: "{user_answer_text}"
-                The correct answer is: "{correct_answer}"
-                The other options are: {', '.join(mcq_questions)}
-
-                Evaluate if the answer is correct. Respond with:
-                - ✅ "Correct!" if the answer is mostly accurate.
-                - ❌ "Incorrect" if it's wrong, followed by a brief explanation of why it's wrong.
-                """
 
             elif session["format"] == "Fill-in-the-Blank":
                 if user_answer.strip().lower() == term.lower():

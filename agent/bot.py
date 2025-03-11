@@ -167,6 +167,7 @@ class DiscordBot(commands.Bot):
                     if session["format"] == "Multiple Choice":
                         mcq_data = self.study_agent.generate_multiple_choice_question(cur_term)
                         session["mcq_options"] = mcq_data["options"]
+                        session["correct_answer"] = mcq_data["correct_answer"]
                         formatted_options = "\n".join(
                             [f"{i + 1}. {option}" for i, option in enumerate(session["mcq_options"])]
                         )
@@ -185,8 +186,8 @@ class DiscordBot(commands.Bot):
         # **Handle Answer Checking and Next Question**
         term = self.study_agent.get_current_term(user_id)
         mcq_options = session.get("mcq_options") if session["format"] == "Multiple Choice" else None
-
-        response = self.study_agent.check_answer(user_id, term, content, mcq_options)
+        correct_index = session.get("correct_answer") if session["format"] == "Multiple Choice" else None
+        response = self.study_agent.check_answer(user_id, term, content, mcq_options, correct_index)
         await ctx.send(response)
 
         next_term = self.study_agent.next_term(user_id)
@@ -194,6 +195,7 @@ class DiscordBot(commands.Bot):
             if session["format"] == "Multiple Choice":
                 mcq_data = self.study_agent.generate_multiple_choice_question(next_term)
                 session["mcq_options"] = mcq_data["options"]
+                session["correct_answer"] = mcq_data["correct_answer"]
                 formatted_options = "\n".join(
                     [f"{i + 1}. {option}" for i, option in enumerate(session["mcq_options"])]
                 )
